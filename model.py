@@ -1,6 +1,7 @@
 import numpy as np
-import torch as nn
+from torch import nn
 import math
+import torch
 
 
 #Realize Multihead attention
@@ -88,7 +89,7 @@ class PositionWiseFeedForward(nn.Module):
         super(PositionWiseFeedForward,self).__init__()
         self.fc1 = nn.Linear(d_model,d_ff)
         self.fc2 = nn.Linear(d_ff,d_model)
-        self.relu = nn.RELU()
+        self.relu = nn.ReLU()
 
     def forward(self,x):
         return self.fc2(self.relu(self.fc1(x)))
@@ -97,12 +98,12 @@ class PositionWiseFeedForward(nn.Module):
 class PositonalEncoding(nn.Module):
     def __init__(self,d_model,max_seq_length):
         super(PositonalEncoding,self).__init__()
-        pe = nn.zeros(max_seq_length,d_model)
-        position = nn.arange(0,max_seq_length,dtype=nn.float).unsqueeze(1)
-        div_term = nn.exp(nn.arange(0,d_model,2).float()*-(math.log(10000.0)/d_model))
+        pe = torch.zeros(max_seq_length,d_model)
+        position = torch.arange(0,max_seq_length,dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0,d_model,2).float()*-(math.log(10000.0)/d_model))
 
-        pe[:,0::2] = nn.sin(position*div_term)
-        pe[:,1::2] = nn.cos(position*div_term)
+        pe[:,0::2] = torch.sin(position*div_term)
+        pe[:,1::2] = torch.cos(position*div_term)
         self.register_buffer('pe',pe.unsqueeze(0))
     
     def forward(self,x):
@@ -115,9 +116,9 @@ class EncoderBlock(nn.Module):
         super(EncoderBlock,self).__init__()
         self.self_attn = MultiHeadAttention(d_model,num_heads)
         self.feed_forward = PositionWiseFeedForward(d_model,d_ff)
-        self.norm1 = nn.layer_norm(d_model)
-        self.norm2 = nn.layer_norm(d_model)
-        self.dropout = nn.dropout(dropout)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self,x,mask):
         # Multihead attention
@@ -137,10 +138,10 @@ class DecoderBlock(nn.Module):
         self.self_attn = MultiHeadAttention(d_model,num_heads)
         self.cross_atnn = MultiHeadAttention(d_model,num_heads)
         self.feed_forward = PositionWiseFeedForward(d_model,d_ff)
-        self.norm1 = nn.layer_norm(d_model)
-        self.norm2 = nn.layer_norm(d_model)
-        self.norm3 = nn.layer_norm(d_model)
-        self.dropout = nn.dropout(dropout)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.norm3 = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self,x,enc_output,src_mask,tgt_mask):
         attn_output = self.self_attn(x,x,x,tgt_mask)
@@ -158,17 +159,20 @@ class DecoderBlock(nn.Module):
 class Transformer(nn.Module):
     def __init__(self,src_vocab_size,tgt_vocab_size,d_model,num_heads,num_layers,d_ff,max_seq_length,dropout):
         super(Transformer,self).__init__()
-        self.encoder_embedding = nn.embedding(src_vocab_size,d_model)
-        self.decoder_embedding = nn.embedding(tgt_vocab_size,d_model)
+        self.encoder_embedding = nn.Embedding(src_vocab_size,d_model)
+        self.decoder_embedding = nn.Embedding(tgt_vocab_size,d_model)
         self.positional_encoding = PositonalEncoding(d_model,max_seq_length)
 
-        self.encoder_layers = nn.MoudleList([EncoderBlock(d_model,num_heads,d_ff,dropout) for _ in range(num_layers)])
-        self.decoder_layers = nn.MoudleList([DecoderBlock(d_model,num_heads,d_ff,dropout) for _ in range(num_layers)])
+        self.encoder_layers = nn.ModuleList([EncoderBlock(d_model,num_heads,d_ff,dropout) for _ in range(num_layers)])
+        self.decoder_layers = nn.ModuleList([DecoderBlock(d_model,num_heads,d_ff,dropout) for _ in range(num_layers)])
 
         self.fc = nn.Linear(d_model,tgt_vocab_size)
-        self.dropout = nn.dropout(dropout)
+        self.dropout = nn.Dropout(dropout)
 
     def generate_mask(self, src, tgt):
+
+
+
         # 源掩码：屏蔽填充符（假设填充符索引为0）
         # 形状：(batch_size, 1, 1, seq_length)
         src_mask = (src != 0).unsqueeze(1).unsqueeze(2)
@@ -178,7 +182,11 @@ class Transformer(nn.Module):
         tgt_mask = (tgt != 0).unsqueeze(1).unsqueeze(3)
         seq_length = tgt.size(1)
         # 生成上三角矩阵掩码，防止解码时看到未来信息
-        nopeak_mask = (1 - nn.triu(nn.ones(1, seq_length, seq_length), diagonal=1)).bool()
+        device = tgt_mask.device
+        nopeak_mask = (1 - nn.functional.pad(torch.ones(1, seq_length, seq_length - 1), (0, 1))).to(device).bool()
+
+        
+
         tgt_mask = tgt_mask & nopeak_mask  # 合并填充掩码和未来信息掩码
         return src_mask, tgt_mask
     
