@@ -11,15 +11,15 @@ from data_processing import load_and_process_data  # 假设数据处理在 data_
 from transformers import MarianTokenizer
 
 # 超参数设置（与论文一致）
-SRC_VOCAB_SIZE = 37000  # 根据论文，WMT 2014 数据集使用了 37000 的源语言词汇表
-TGT_VOCAB_SIZE = 37000  # 目标语言词汇表大小
+SRC_VOCAB_SIZE = 100000  # 根据论文，WMT 2014 数据集使用了 37000 的源语言词汇表
+TGT_VOCAB_SIZE = 100000  # 目标语言词汇表大小
 D_MODEL = 512  # 模型维度
 NUM_HEADS = 8  # 多头注意力头数
 NUM_LAYERS = 6  # 编码器和解码器的层数
 D_FF = 2048  # 前馈网络的隐藏层维度
 MAX_SEQ_LENGTH = 128  # 最大序列长度  128
 BATCH_SIZE = 64  # 每批次大小
-EPOCHS = 2  # 训练周期数  10
+EPOCHS = 1   # 训练周期数  10
 LEARNING_RATE = 0.0001  # 学习率
 WARMUP_STEPS = 4000  # 论文中的 warmup 步数
 
@@ -98,6 +98,10 @@ def train():
             tgt_batch = batch['labels']
             tgt_batch = [tensor.to(device) for tensor in tgt_batch]
 
+
+
+           
+
             src = torch.stack(src_batch).to(device)
             tgt = torch.stack(tgt_batch).to(device)
             # 生成 mask
@@ -108,7 +112,7 @@ def train():
             tgt_batch = torch.stack(tgt_batch).to(device)
             output = model(src_batch, tgt_batch[:, :-1])
             output = model(src_batch, tgt_batch[:, :-1])
-
+            
             # 计算损失
             loss = criterion(output.view(-1, TGT_VOCAB_SIZE), tgt_batch[:, 1:].contiguous().view(-1))
             loss.backward()

@@ -31,17 +31,17 @@ class MultiHeadAttention(nn.Module):
         Mask operation is optional.
         """
         # Compute attention scores(Q·K^T/sqrt(d_k))
-        attn_scores = nn.matmul(Q,K.transpose(-2,-1)) / math.sqrt(self.d_k)  #the shape of it is (batch_size,num_heads,seq_length,seq_length) 
+        attn_scores = torch.matmul(Q,K.transpose(-2,-1)) / math.sqrt(self.d_k)  #the shape of it is (batch_size,num_heads,seq_length,seq_length) 
 
         # Mask
         if mask is not None:
             attn_scores = attn_scores.masked_fill(mask == 0 , -1e9)
 
         # Compute attention weights
-        attn_weights = nn.softmax(attn_scores,dim = -1)
+        attn_weights = torch.softmax(attn_scores,dim = -1)
 
         # Compute the weighted sum of value vector
-        output = nn.matmul(attn_weights,V)
+        output = torch.matmul(attn_weights,V)
 
         return output
     
@@ -60,7 +60,7 @@ class MultiHeadAttention(nn.Module):
         The shape of the input is (batch_size,num_heads,seq_length,d_k)
         The shape of the output is (batch_size,seq_length,d_model)
         """
-        batch_size,seq_length,d_k = x.size()
+        batch_size, num_heads, seq_length, d_k = x.size()
         return x.transpose(1,2).contiguous().view(batch_size,seq_length,self.d_model)
     
     def forward(self,Q,K,V,mask = None):
@@ -159,6 +159,7 @@ class DecoderBlock(nn.Module):
 class Transformer(nn.Module):
     def __init__(self,src_vocab_size,tgt_vocab_size,d_model,num_heads,num_layers,d_ff,max_seq_length,dropout):
         super(Transformer,self).__init__()
+
         self.encoder_embedding = nn.Embedding(src_vocab_size,d_model)
         self.decoder_embedding = nn.Embedding(tgt_vocab_size,d_model)
         self.positional_encoding = PositonalEncoding(d_model,max_seq_length)
