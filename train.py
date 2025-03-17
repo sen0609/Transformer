@@ -13,12 +13,12 @@ from transformers import MarianTokenizer
 # 超参数设置（与论文一致）
 SRC_VOCAB_SIZE = 100000  # 根据论文，WMT 2014 数据集使用了 37000 的源语言词汇表
 TGT_VOCAB_SIZE = 100000  # 目标语言词汇表大小
-D_MODEL = 512  # 模型维度
+D_MODEL = 256  # 模型维度 512
 NUM_HEADS = 8  # 多头注意力头数
 NUM_LAYERS = 6  # 编码器和解码器的层数
 D_FF = 2048  # 前馈网络的隐藏层维度
 MAX_SEQ_LENGTH = 128  # 最大序列长度  128
-BATCH_SIZE = 64  # 每批次大小
+BATCH_SIZE = 16  # 每批次大小
 EPOCHS = 1   # 训练周期数  10
 LEARNING_RATE = 0.0001  # 学习率
 WARMUP_STEPS = 4000  # 论文中的 warmup 步数
