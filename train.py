@@ -1,5 +1,5 @@
 import os
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader,TensorDataset
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -11,14 +11,14 @@ from data_processing import load_and_process_data  # 假设数据处理在 data_
 from transformers import MarianTokenizer
 
 # 超参数设置（与论文一致）
-SRC_VOCAB_SIZE = 100000  # 根据论文，WMT 2014 数据集使用了 37000 的源语言词汇表
-TGT_VOCAB_SIZE = 100000  # 目标语言词汇表大小
-D_MODEL = 256  # 模型维度 512
+SRC_VOCAB_SIZE = 58101  # 根据论文，WMT 2014 数据集使用了 37000 的源语言词汇表
+TGT_VOCAB_SIZE = 58101  # 目标语言词汇表大小
+D_MODEL = 512  # 模型维度 512
 NUM_HEADS = 8  # 多头注意力头数
 NUM_LAYERS = 6  # 编码器和解码器的层数
 D_FF = 2048  # 前馈网络的隐藏层维度
 MAX_SEQ_LENGTH = 128  # 最大序列长度  128
-BATCH_SIZE = 16  # 每批次大小
+BATCH_SIZE = 64  # 每批次大小
 EPOCHS = 1   # 训练周期数  10
 LEARNING_RATE = 0.0001  # 学习率
 WARMUP_STEPS = 4000  # 论文中的 warmup 步数
@@ -53,12 +53,17 @@ def train():
     # 设置设备
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # 加载数据
-    train_data, valid_data = load_and_process_data()
+    # 加载预处理后的索引数据
+    en_idx = torch.load('./en_processed_indexes.pt')
+    de_idx = torch.load('./de_processed_indexes.pt')
 
-    # DataLoader
-    train_dataloader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
-    valid_dataloader = DataLoader(valid_data, batch_size=BATCH_SIZE, shuffle=False)
+    # 创建数据集和数据加载器
+    dataset = TensorDataset(en_idx, de_idx)  # 将英文和德文数据配对
+    dataloader = DataLoader(
+        dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True  # 每个epoch前打乱数据
+    )
 
     # 创建模型
     model = Transformer(
@@ -73,7 +78,7 @@ def train():
     ).to(device)
 
     # 损失函数和优化器
-    criterion = nn.CrossEntropyLoss(ignore_index=0)  # 忽略填充符
+    criterion = nn.CrossEntropyLoss(ignore_index=1)  # 忽略填充符
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, betas=(0.9, 0.98), eps=1e-9)
     scheduler = TransformerLRScheduler(d_model=D_MODEL, warmup_steps=WARMUP_STEPS)
 
@@ -89,28 +94,14 @@ def train():
     for epoch in range(EPOCHS):
         model.train()
         train_loss = 0
-        batch_iterator = tqdm(train_dataloader, desc=f"Epoch {epoch + 1}", leave=False)
+        batch_iterator = tqdm(dataloader, desc=f"Epoch {epoch + 1}", leave=False)
 
-        for batch in batch_iterator:
-            src_batch = batch['input_ids']
-            src_batch = [tensor.to(device) for tensor in src_batch]
-
-            tgt_batch = batch['labels']
-            tgt_batch = [tensor.to(device) for tensor in tgt_batch]
-
-
-
-           
-
-            src = torch.stack(src_batch).to(device)
-            tgt = torch.stack(tgt_batch).to(device)
-            # 生成 mask
-            src_mask, tgt_mask = model.generate_mask(src, tgt)
+        for src_batch, tgt_batch in batch_iterator:
+            src_batch = src_batch.to(device)
+            tgt_batch = tgt_batch.to(device)
 
             optimizer.zero_grad()
-            src_batch = torch.stack(src_batch).to(device)
-            tgt_batch = torch.stack(tgt_batch).to(device)
-            output = model(src_batch, tgt_batch[:, :-1])
+
             output = model(src_batch, tgt_batch[:, :-1])
             
             # 计算损失
@@ -137,7 +128,7 @@ def train():
                     'Learning Rate': current_lr
                 })
 
-        epoch_loss = train_loss / len(train_dataloader)
+        epoch_loss = train_loss / len(dataloader)
         print(f'🚀 Epoch {epoch + 1}/{EPOCHS} Loss: {epoch_loss:.4f}')
 
         # 每个epoch结束后保存模型
@@ -162,9 +153,6 @@ def train():
             for log in epoch_log_data:
                 writer.writerow(log)
 
-        # 每个epoch结束后进行验证
-        validate(valid_dataloader, model, criterion, device)
-
     # 保存每200个batch的训练日志
     batch_csv_save_path = 'batch_training_logs.csv'
     os.makedirs(os.path.dirname(batch_csv_save_path), exist_ok=True)
@@ -176,22 +164,6 @@ def train():
             writer.writerow(log)
     print(f"每200个batch训练日志已保存到 {batch_csv_save_path}")
 
-# 验证过程
-def validate(valid_dataloader, model, criterion, device):
-    model.eval()
-    total_loss = 0.0
-    with torch.no_grad():
-        for src_batch, tgt_batch in valid_dataloader:
-            src_batch = src_batch.to(device)
-            tgt_batch = tgt_batch.to(device)
-
-            src_mask, tgt_mask = model.generate_mask(src_batch, tgt_batch)
-            output = model(src_batch, tgt_batch[:, :-1])
-
-            loss = criterion(output.view(-1, TGT_VOCAB_SIZE), tgt_batch[:, 1:].contiguous().view(-1))
-            total_loss += loss.item()
-
-    print(f"Validation Loss: {total_loss / len(valid_dataloader):.4f}")
 
 # 启动训练
 if __name__ == "__main__":

@@ -4,6 +4,19 @@ import math
 import torch
 
 
+def initialize_weights(module):
+    """
+    初始化网络权重
+    - 线性层使用Xavier均匀初始化
+    - 嵌入层使用Xavier均匀初始化
+    """
+    if isinstance(module, nn.Linear):
+        nn.init.xavier_uniform_(module.weight)
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
+    elif isinstance(module, nn.Embedding):
+        nn.init.xavier_uniform_(module.weight)
+
 #Realize Multihead attention
 class MultiHeadAttention(nn.Module):
     def __init__(self,d_model,num_heads):  
@@ -19,6 +32,10 @@ class MultiHeadAttention(nn.Module):
         self.W_k = nn.Linear(d_model,d_model)
         self.W_v = nn.Linear(d_model,d_model)
         self.W_o = nn.Linear(d_model,d_model)
+        initialize_weights(self.W_k)
+        initialize_weights(self.W_q)
+        initialize_weights(self.W_v)
+        initialize_weights(self.W_o)
 
 
 
@@ -90,6 +107,8 @@ class PositionWiseFeedForward(nn.Module):
         self.fc1 = nn.Linear(d_model,d_ff)
         self.fc2 = nn.Linear(d_ff,d_model)
         self.relu = nn.ReLU()
+        initialize_weights(self.fc1)
+        initialize_weights(self.fc2)
 
     def forward(self,x):
         return self.fc2(self.relu(self.fc1(x)))
@@ -171,23 +190,18 @@ class Transformer(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def generate_mask(self, src, tgt):
-
-
-
         # 源掩码：屏蔽填充符（假设填充符索引为0）
         # 形状：(batch_size, 1, 1, seq_length)
-        src_mask = (src != 0).unsqueeze(1).unsqueeze(2)
+        src_mask = (src != 1).unsqueeze(1).unsqueeze(2)
    
         # 目标掩码：屏蔽填充符和未来信息
         # 形状：(batch_size, 1, seq_length, 1)
-        tgt_mask = (tgt != 0).unsqueeze(1).unsqueeze(3)
+        tgt_mask = (tgt != 1).unsqueeze(1).unsqueeze(3)
         seq_length = tgt.size(1)
         # 生成上三角矩阵掩码，防止解码时看到未来信息
         device = tgt_mask.device
         nopeak_mask = (1 - nn.functional.pad(torch.ones(1, seq_length, seq_length - 1), (0, 1))).to(device).bool()
-
         
-
         tgt_mask = tgt_mask & nopeak_mask  # 合并填充掩码和未来信息掩码
         return src_mask, tgt_mask
     
